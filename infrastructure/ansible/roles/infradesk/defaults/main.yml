@@ -1,0 +1,3 @@
+---
+# Defaults of the infradesk role. Real values come from group_vars/all.yml.
+infradesk_state_file: /opt/infradesk/app/.deploy-state.json

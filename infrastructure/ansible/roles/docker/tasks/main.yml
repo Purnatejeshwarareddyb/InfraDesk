@@ -1,0 +1,41 @@
+---
+# Role docker: only CHECKS that Docker and the Compose plugin are usable.
+# Installing Docker is the job of Puppet (host baseline) or scripts/setup_ubuntu.sh.
+- name: Docker CLI is installed
+  ansible.builtin.command: docker --version
+  register: docker_version
+  changed_when: false
+  check_mode: false
+  failed_when: false
+  become: "{{ infradesk_become }}"
+
+- name: Docker daemon answers (running and reachable)
+  ansible.builtin.command: docker info --format '{% raw %}{{.ServerVersion}}{% endraw %}'
+  register: docker_info
+  changed_when: false
+  check_mode: false
+  failed_when: false
+  become: "{{ infradesk_become }}"
+  when: docker_version.rc == 0
+
+- name: Docker Compose plugin is installed
+  ansible.builtin.command: docker compose version
+  register: docker_compose_version
+  changed_when: false
+  check_mode: false
+  failed_when: false
+  become: "{{ infradesk_become }}"
+  when: docker_version.rc == 0
+
+- name: Stop with a clear message if Docker is not usable
+  ansible.builtin.assert:
+    that:
+      - docker_version.rc == 0
+      - docker_info.rc | default(1) == 0
+      - docker_compose_version.rc | default(1) == 0
+    success_msg: >-
+      {{ docker_version.stdout }}; daemon {{ docker_info.stdout }}; {{ docker_compose_version.stdout }}
+    fail_msg: >-
+      Docker is not ready. CLI rc={{ docker_version.rc }}, daemon rc={{ docker_info.rc | default('not checked') }},
+      compose rc={{ docker_compose_version.rc | default('not checked') }}.
+      Install/start Docker (Puppet module or scripts/setup_ubuntu.sh), then run this again.

@@ -1,0 +1,9 @@
+# Runtime dependencies (tested with Python 3.13)
+fastapi>=0.143,<0.144
+uvicorn[standard]>=0.54,<0.55
+SQLAlchemy>=2.1,<2.2
+alembic>=1.20,<1.21
+pydantic>=2.14,<3
+pydantic-settings>=2.16,<3
+PyJWT>=2.15,<3
+argon2-cffi>=25.1,<26

@@ -1,0 +1,209 @@
+---
+# Role infradesk: deploy the application with Docker Compose.
+# Order: checks -> build source archive -> compute release id -> read old state -> copy files ->
+#        template .env -> (handler builds + starts only if something changed) -> wait for /ready.
+
+- name: Refuse to continue without a real secret key
+  ansible.builtin.assert:
+    that:
+      - infradesk_secret_key | length >= 32
+      - not (infradesk_secret_key | lower).startswith('change-me')
+    fail_msg: >-
+      SECRET_KEY missing or too weak. export INFRADESK_SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
+      or pass an ansible-vault file with -e @file. It is never stored in the repository.
+    quiet: true
+  no_log: true
+  tags: [deploy]
+
+- name: Check that the frontend sources exist (needed to build the web image)
+  ansible.builtin.stat:
+    path: "{{ infradesk_repo_root }}/frontend/package.json"
+  delegate_to: localhost
+  become: false
+  register: infradesk_frontend_pkg
+  tags: [deploy]
+
+- name: Stop if frontend/package.json is missing
+  ansible.builtin.assert:
+    that: infradesk_frontend_pkg.stat.exists
+    fail_msg: "frontend/package.json not found under {{ infradesk_repo_root }}; the web image cannot be built."
+    quiet: true
+  tags: [deploy]
+
+# A deterministic tar (sorted, fixed mtime/owner, no gzip) means identical sources give an identical
+# checksum, which becomes the release id. So "deploy twice" changes nothing the second time.
+- name: Create a temporary file for the source archive
+  ansible.builtin.tempfile:
+    state: file
+    suffix: .infradesk.tar
+  delegate_to: localhost
+  become: false
+  register: infradesk_src_tar
+  check_mode: false
+  changed_when: false
+  tags: [deploy]
+
+- name: Pack the files needed to build the images
+  ansible.builtin.command:
+    argv:
+      - tar
+      - --sort=name
+      - --mtime=@0
+      - --owner=0
+      - --group=0
+      - --numeric-owner
+      - --mode=u+rwX,go+rX,go-w
+      - --exclude=node_modules
+      - --exclude=.venv
+      - --exclude=__pycache__
+      - --exclude=dist
+      - --exclude=coverage
+      - --exclude=backend/data
+      - --exclude=backend/backups
+      - --exclude=*.db
+      - --exclude=.pytest_cache
+      - --exclude=.ruff_cache
+      - -cf
+      - "{{ infradesk_src_tar.path }}"
+      - -C
+      - "{{ infradesk_repo_root }}"
+      - docker-compose.yml
+      - .dockerignore
+      - docker
+      - backend
+      - frontend
+  delegate_to: localhost
+  become: false
+  check_mode: false
+  changed_when: false
+  tags: [deploy]
+
+- name: Checksum of the source archive
+  ansible.builtin.stat:
+    path: "{{ infradesk_src_tar.path }}"
+    checksum_algorithm: sha256
+  delegate_to: localhost
+  become: false
+  register: infradesk_src_stat
+  check_mode: false
+  tags: [deploy]
+
+- name: Decide the release id (image tag)
+  ansible.builtin.set_fact:
+    infradesk_release: "{{ infradesk_release_override if (infradesk_release_override | length > 0) else 'r' ~ infradesk_src_stat.stat.checksum[:12] }}"
+  tags: [deploy]
+
+- name: Create the application directory
+  ansible.builtin.file:
+    path: "{{ infradesk_app_dir }}"
+    state: directory
+    mode: "0755"
+  become: "{{ infradesk_become }}"
+  tags: [deploy]
+
+- name: Read the deployment state file (it may not exist yet)
+  ansible.builtin.slurp:
+    src: "{{ infradesk_state_file }}"
+  register: infradesk_state_raw
+  failed_when: false
+  check_mode: false
+  become: "{{ infradesk_become }}"
+  tags: [deploy]
+
+- name: Work out which tag was live before this deployment
+  ansible.builtin.set_fact:
+    infradesk_old_state: "{{ (infradesk_state_raw.content | b64decode | from_json) if infradesk_state_raw.content is defined else {} }}"
+  tags: [deploy]
+
+- name: Record current and previous tag BEFORE deploying
+  ansible.builtin.copy:
+    dest: "{{ infradesk_state_file }}"
+    mode: "0644"
+    content: "{{ infradesk_new_state | to_nice_json }}\n"
+  vars:
+    # If the live tag is already the new one, keep the older "previous" so rollback still works.
+    infradesk_previous_tag: >-
+      {{ infradesk_old_state.get('previous_tag', '') if infradesk_old_state.get('current_tag', '') == infradesk_release
+         else infradesk_old_state.get('current_tag', '') }}
+    infradesk_new_state:
+      current_tag: "{{ infradesk_release }}"
+      previous_tag: "{{ infradesk_previous_tag | trim }}"
+  become: "{{ infradesk_become }}"
+  tags: [deploy]
+
+- name: Copy the source archive to the target
+  ansible.builtin.unarchive:
+    src: "{{ infradesk_src_tar.path }}"
+    dest: "{{ infradesk_app_dir }}"
+    creates: "{{ infradesk_app_dir }}/.source-{{ infradesk_release }}"
+  become: "{{ infradesk_become }}"
+  notify: infradesk stack changed
+  tags: [deploy]
+
+- name: Record the extracted source release
+  ansible.builtin.copy:
+    dest: "{{ infradesk_app_dir }}/.source-{{ infradesk_release }}"
+    content: "{{ infradesk_release }}\n"
+    mode: "0644"
+  become: "{{ infradesk_become }}"
+  changed_when: false
+  tags: [deploy]
+
+- name: Write the .env file from variables (secret comes from the environment or a vault)
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ infradesk_app_dir }}/.env"
+    mode: "0600"
+  no_log: true
+  become: "{{ infradesk_become }}"
+  notify: infradesk stack changed
+  tags: [deploy]
+
+- name: Remove the temporary archive
+  ansible.builtin.file:
+    path: "{{ infradesk_src_tar.path }}"
+    state: absent
+  delegate_to: localhost
+  become: false
+  check_mode: false
+  changed_when: false
+  tags: [deploy]
+
+# Build + start now (only if the handler was notified), so the checks below see the new version.
+- name: Run the handlers now
+  ansible.builtin.meta: flush_handlers
+  tags: [deploy]
+
+# --build again on purpose: if an earlier run failed during the build, the handler notification was lost
+# and the images would be missing. A cached build takes seconds and recreates nothing when nothing changed.
+- name: Make sure the stack is built and running (starts stopped containers)
+  ansible.builtin.command:
+    argv: "{{ infradesk_compose_cmd + ['up', '-d', '--build'] }}"
+    chdir: "{{ infradesk_app_dir }}"
+  become: "{{ infradesk_become }}"
+  register: infradesk_compose_up
+  changed_when: "'Started' in infradesk_compose_up.stderr or 'Created' in infradesk_compose_up.stderr or 'Recreated' in infradesk_compose_up.stderr"
+  tags: [deploy]
+
+- name: Wait for the web port to open
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ infradesk_port | int }}"
+    timeout: 120
+  tags: [deploy]
+
+- name: Wait until /ready reports the database is reachable
+  ansible.builtin.uri:
+    url: "{{ infradesk_base_url }}/ready"
+    return_content: true
+  register: infradesk_ready_check
+  until: infradesk_ready_check.status == 200 and 'ready' in infradesk_ready_check.content
+  retries: "{{ infradesk_ready_retries }}"
+  delay: "{{ infradesk_ready_delay }}"
+  check_mode: false
+  tags: [deploy]
+
+- name: Report the release
+  ansible.builtin.debug:
+    msg: "Release {{ infradesk_release }} is live at {{ infradesk_base_url }}; previous tag recorded in {{ infradesk_state_file }}."
+  tags: [deploy]

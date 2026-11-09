@@ -1,0 +1,73 @@
+# InfraDesk - Docker Compose stack (backend API + nginx web).
+#   cp .env.example .env   (or: make env)   then   docker compose up -d --build
+# Open http://localhost:${INFRADESK_PORT:-8080}
+#
+# NOTE: `docker compose` also auto-loads compose.override.yml (development extras).
+# For a production-like run use:  docker compose -f docker-compose.yml up -d
+name: infradesk
+
+services:
+  backend:
+    build:
+      context: .                           # repo root, so the Dockerfile can COPY backend/
+      dockerfile: docker/backend.Dockerfile
+    image: infradesk-backend:${INFRADESK_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      # Required: compose refuses to start if SECRET_KEY is missing from .env / the shell.
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
+      # Inside the container the database is on the named volume, whatever .env says.
+      DATABASE_URL: sqlite:////data/infradesk.db
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}          # true only behind HTTPS
+      ACCESS_TOKEN_MINUTES: ${ACCESS_TOKEN_MINUTES:-60}
+      # Same-origin through nginx means CORS is not really needed; kept for direct API access.
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+    volumes:
+      - infradesk-data:/data
+    healthcheck:
+      # /ready also proves the database is reachable (503 otherwise -> urlopen raises -> unhealthy).
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    mem_limit: 512m            # modest limits for an 8 GB laptop
+    cpus: 1.0
+    networks: [infradesk-net]
+    # No published port: only the web container talks to the API.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    image: infradesk-frontend:${INFRADESK_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${INFRADESK_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/nginx-health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    mem_limit: 128m
+    cpus: 0.5
+    networks: [infradesk-net]
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+
+networks:
+  infradesk-net:
+    name: infradesk-net      # dedicated network, fixed name
+
+volumes:
+  infradesk-data:
+    name: infradesk-data     # fixed name so scripts, Ansible and docs can refer to it

@@ -1,0 +1,45 @@
+---
+# Variables shared by all playbooks. Override any of them with -e name=value.
+
+# --- Where things live ---------------------------------------------------------------------
+# Application files owned by Ansible (Puppet only creates /opt/infradesk, never this folder).
+infradesk_app_dir: /opt/infradesk/app
+# Local test without sudo:  -e infradesk_app_dir=$HOME/infradesk-app -e infradesk_become=false
+infradesk_become: true
+# The repository on the machine running ansible-playbook (playbooks/ -> ansible/ -> infrastructure/ -> repo).
+infradesk_repo_root: "{{ playbook_dir | dirname | dirname | dirname }}"
+# Remembers which image tag is live and which was live before (used by rollback.yml).
+infradesk_state_file: "{{ infradesk_app_dir }}/.deploy-state.json"
+
+# --- Docker Compose --------------------------------------------------------------------------
+infradesk_compose_project: infradesk
+# Explicit file: the dev-only compose.override.yml is never used for deployments.
+infradesk_compose_cmd: ['docker', 'compose', '-p', '{{ infradesk_compose_project }}', '-f', 'docker-compose.yml']
+infradesk_data_volume: infradesk-data
+
+# --- Application settings written to the .env file --------------------------------------------
+infradesk_port: "{{ lookup('ansible.builtin.env', 'INFRADESK_PORT') | default('8080', true) }}"
+infradesk_environment: production
+infradesk_cookie_secure: false
+infradesk_access_token_minutes: 60
+infradesk_cors_origins: "http://localhost:{{ infradesk_port }}"
+
+# --- Secret ------------------------------------------------------------------------------------
+# Never stored in the repository. Two safe ways to supply it:
+#   a) export INFRADESK_SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
+#   b) ansible-vault encrypted file outside the repo: -e @~/.infradesk-secrets.yml --ask-vault-pass
+#      (the file contains one line:  infradesk_secret_key: "...")
+infradesk_secret_key: "{{ lookup('ansible.builtin.env', 'INFRADESK_SECRET_KEY') }}"
+
+# --- Release id -----------------------------------------------------------------------------------
+# Empty = derived from a checksum of the source files, so deploying unchanged code is a no-op.
+# Set INFRADESK_RELEASE (or -e infradesk_release_override=2024-demo1) to choose your own tag.
+infradesk_release_override: "{{ lookup('ansible.builtin.env', 'INFRADESK_RELEASE') }}"
+
+# --- Preflight thresholds ------------------------------------------------------------------------
+infradesk_min_free_gb: 5
+infradesk_disk_path: /
+# URL base used by wait_for / validate (tasks run on the target host itself).
+infradesk_base_url: "http://127.0.0.1:{{ infradesk_port }}"
+infradesk_ready_retries: 30
+infradesk_ready_delay: 4

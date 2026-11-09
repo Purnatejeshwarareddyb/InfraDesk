@@ -1,0 +1,72 @@
+---
+# Read-only checks before a deployment. Changes nothing.
+#   ansible-playbook playbooks/preflight.yml
+- name: InfraDesk preflight checks
+  hosts: infradesk
+  gather_facts: false
+  # group_vars/ sits next to playbooks/, not next to the inventory, so load it explicitly.
+  vars_files:
+    - ../group_vars/all.yml
+  tags: [preflight]
+  pre_tasks:
+    - name: Connectivity (Ansible can reach the host and run Python)
+      ansible.builtin.ping:
+
+    - name: Secret key is available (value is not shown)
+      ansible.builtin.assert:
+        that:
+          - infradesk_secret_key | length >= 32
+          - not (infradesk_secret_key | lower).startswith('change-me')
+        fail_msg: "Set INFRADESK_SECRET_KEY (or pass a vault file with -e @file). See README."
+        quiet: true
+      no_log: true
+
+  roles:
+    - docker # docker present, daemon running, compose plugin present
+
+  tasks:
+    - name: Free disk space on the target
+      ansible.builtin.command: "df -Pk {{ infradesk_disk_path }}"
+      register: df_out
+      changed_when: false
+      check_mode: false
+    - name: Disk space is above the threshold
+      ansible.builtin.assert:
+        that: (df_out.stdout_lines[1].split()[3] | int) / 1048576 >= infradesk_min_free_gb | float
+        success_msg: "{{ ((df_out.stdout_lines[1].split()[3] | int) / 1048576) | round(1) }} GB free on {{ infradesk_disk_path }}"
+        fail_msg: "Less than {{ infradesk_min_free_gb }} GB free on {{ infradesk_disk_path }}. Free some space (docker system prune, old backups)."
+
+
+    - name: Find Docker containers publishing the web port
+      ansible.builtin.command:
+        argv:
+          - docker
+          - ps
+          - --filter
+          - "publish={{ infradesk_port }}"
+          - --format
+          - "{% raw %}{{.Names}}|{{.Label \"com.docker.compose.project\"}}{% endraw %}"
+      register: port_publishers
+      changed_when: false
+      check_mode: false
+
+    - name: Identify containers owned by this Compose project
+      ansible.builtin.set_fact:
+        infradesk_port_owners: >-
+          {{
+            port_publishers.stdout_lines
+            | select('search', '^[^|]+\\|' ~ (infradesk_compose_project | regex_escape) ~ '$')
+            | list
+          }}
+
+    - name: Port is free or owned by this project
+      ansible.builtin.assert:
+        that:
+          - port_publishers.stdout_lines | length == 0 or infradesk_port_owners | length > 0
+        success_msg: >-
+          Port {{ infradesk_port }} is {{
+            'owned by this project' if infradesk_port_owners | length > 0 else 'free'
+          }}.
+        fail_msg: >-
+          Port {{ infradesk_port }} is used by another Docker container.
+          Stop that container or choose another port.

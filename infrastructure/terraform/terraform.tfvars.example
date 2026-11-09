@@ -1,0 +1,17 @@
+# Copy to terraform.tfvars (git-ignored) and edit. Never commit the real file.
+# Prefer passing the secret through the environment instead of writing it down:
+#   export TF_VAR_secret_key="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
+
+# secret_key = "paste-a-generated-value-of-at-least-32-characters"
+
+web_port       = 8081 # Compose uses 8080
+backend_image  = "infradesk-backend:latest"
+frontend_image = "infradesk-frontend:latest"
+environment    = "production"
+bind_ip        = "127.0.0.1"
+
+# Windows Docker Desktop with native Terraform:
+# docker_host = "npipe:////./pipe/docker_engine"
+
+# true = Terraform owns (and a full destroy deletes) the volume infradesk-tf-data
+manage_data_volume = true

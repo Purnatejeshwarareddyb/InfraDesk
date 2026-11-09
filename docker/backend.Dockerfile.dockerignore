@@ -1,0 +1,36 @@
+# Used by: docker build -f docker/backend.Dockerfile (BuildKit picks <Dockerfile>.dockerignore automatically).
+# Build context is the repo root (see docker-compose.yml). Keep it small and
+# keep secrets and local data OUT of the images.
+.git
+.github
+.env
+.env.*
+!.env.example
+.venv
+venv
+**/.venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.ruff_cache
+node_modules
+**/node_modules
+frontend/dist
+frontend/coverage
+data
+backend/data
+backups
+backend/backups
+*.db
+*.db-wal
+*.db-shm
+*.sqlite3
+docs
+infrastructure
+scripts
+Makefile
+*.md
+*.tfstate*
+.terraform
+# the backend image does not need the frontend sources
+frontend

@@ -1,0 +1,15 @@
+{
+  "name": "infradesk-infradesk_host",
+  "version": "0.1.0",
+  "author": "InfraDesk team",
+  "summary": "Ubuntu host baseline for InfraDesk: packages, user, directories, env file, docker service, backup timer.",
+  "license": "MIT",
+  "source": "https://example.invalid/infradesk (local module, not published)",
+  "dependencies": [],
+  "operatingsystem_support": [
+    { "operatingsystem": "Ubuntu", "operatingsystemrelease": ["22.04", "24.04"] }
+  ],
+  "requirements": [
+    { "name": "puppet", "version_requirement": ">= 7.0.0 < 9.0.0" }
+  ]
+}

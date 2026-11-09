@@ -1,0 +1,71 @@
+"""Enumerations shared by models and schemas."""
+
+from enum import StrEnum
+
+
+class Role(StrEnum):
+    ADMIN = "ADMIN"
+    WORKER = "WORKER"
+
+
+class TicketStatus(StrEnum):
+    OPEN = "OPEN"
+    ASSIGNED = "ASSIGNED"
+    IN_PROGRESS = "IN_PROGRESS"
+    WAITING = "WAITING"
+    RESOLVED = "RESOLVED"
+    CLOSED = "CLOSED"
+    CANCELLED = "CANCELLED"
+
+
+class Priority(StrEnum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    URGENT = "URGENT"
+
+
+class Category(StrEnum):
+    HARDWARE = "HARDWARE"
+    SOFTWARE = "SOFTWARE"
+    NETWORK = "NETWORK"
+    ACCOUNT_ACCESS = "ACCOUNT_ACCESS"
+    PRINTER = "PRINTER"
+    OTHER = "OTHER"
+
+
+class AssetStatus(StrEnum):
+    ACTIVE = "ACTIVE"
+    IN_REPAIR = "IN_REPAIR"
+    RETIRED = "RETIRED"
+
+
+class AssetType(StrEnum):
+    COMPUTER = "COMPUTER"
+    LAPTOP = "LAPTOP"
+    PRINTER = "PRINTER"
+    NETWORK = "NETWORK"
+    PERIPHERAL = "PERIPHERAL"
+    OTHER = "OTHER"
+
+
+class EventType(StrEnum):
+    TICKET_CREATED = "TICKET_CREATED"
+    TICKET_UPDATED = "TICKET_UPDATED"
+    TICKET_ASSIGNED = "TICKET_ASSIGNED"
+    STATUS_CHANGED = "STATUS_CHANGED"
+    COMMENT_ADDED = "COMMENT_ADDED"
+    USER_CREATED = "USER_CREATED"
+    USER_UPDATED = "USER_UPDATED"
+    USER_ACTIVATED = "USER_ACTIVATED"
+    USER_DEACTIVATED = "USER_DEACTIVATED"
+    ASSET_CREATED = "ASSET_CREATED"
+    ASSET_UPDATED = "ASSET_UPDATED"
+    ASSET_RETIRED = "ASSET_RETIRED"
+
+
+class NotificationType(StrEnum):
+    TICKET_CREATED = "TICKET_CREATED"
+    TICKET_ASSIGNED = "TICKET_ASSIGNED"
+    TICKET_COMMENT = "TICKET_COMMENT"
+    TICKET_STATUS = "TICKET_STATUS"

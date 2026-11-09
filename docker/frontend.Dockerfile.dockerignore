@@ -1,0 +1,19 @@
+# Used by: docker build -f docker/frontend.Dockerfile (BuildKit picks <Dockerfile>.dockerignore automatically).
+# Frontend image needs only frontend/ and docker/nginx/.
+.git
+.github
+.env
+.env.*
+node_modules
+**/node_modules
+frontend/dist
+frontend/coverage
+backend
+backups
+data
+docs
+infrastructure
+scripts
+*.db
+*.tfstate*
+.terraform

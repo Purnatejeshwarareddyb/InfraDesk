@@ -1,0 +1,49 @@
+---
+# Human-run recovery procedures. Nagios only DETECTS problems; nothing here runs automatically.
+#
+#   Roll back to the previous release:   ansible-playbook playbooks/rollback.yml -K
+#   Just restart the stack (recover):    ansible-playbook playbooks/rollback.yml -K --tags recover
+- name: Roll back to the previously deployed image tag
+  hosts: infradesk
+  gather_facts: false
+  # group_vars/ sits next to playbooks/, not next to the inventory, so load it explicitly.
+  vars_files:
+    - ../group_vars/all.yml
+  tags: [rollback]
+  tasks:
+    - name: Roll back
+      ansible.builtin.include_role:
+        name: infradesk
+        tasks_from: rollback.yml
+
+# "never" means: this play runs only when you ask for it with --tags recover.
+- name: Recover - restart the stack in place (no rebuild, no data change)
+  hosts: infradesk
+  gather_facts: false
+  # group_vars/ sits next to playbooks/, not next to the inventory, so load it explicitly.
+  vars_files:
+    - ../group_vars/all.yml
+  tags: [recover, never]
+  tasks:
+    - name: Start or restart all containers
+      ansible.builtin.command:
+        argv: "{{ infradesk_compose_cmd + ['restart'] }}"
+        chdir: "{{ infradesk_app_dir }}"
+      become: "{{ infradesk_become }}"
+      changed_when: true
+
+    - name: Start anything that was stopped
+      ansible.builtin.command:
+        argv: "{{ infradesk_compose_cmd + ['up', '-d', '--no-build'] }}"
+        chdir: "{{ infradesk_app_dir }}"
+      become: "{{ infradesk_become }}"
+      changed_when: false
+
+    - name: Wait until /ready answers again
+      ansible.builtin.uri:
+        url: "{{ infradesk_base_url }}/ready"
+        return_content: true
+      register: ready_check
+      until: ready_check.status == 200 and 'ready' in ready_check.content
+      retries: "{{ infradesk_ready_retries }}"
+      delay: "{{ infradesk_ready_delay }}"

@@ -1,0 +1,4 @@
+# yamllint settings: the default "relaxed" rules, but long lines are allowed (comments and shell commands).
+extends: relaxed
+rules:
+  line-length: disable

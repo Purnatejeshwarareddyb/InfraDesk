@@ -1,0 +1,22 @@
+# Tool configuration only. Dependencies are listed in requirements.txt / requirements-dev.txt.
+
+[tool.pytest.ini_options]
+testpaths = ["app/tests"]
+addopts = "-p no:cacheprovider"
+filterwarnings = [
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated:DeprecationWarning",
+    "ignore::starlette.exceptions.StarletteDeprecationWarning",
+]
+
+[tool.ruff]
+line-length = 130
+target-version = "py312"
+extend-exclude = [".venv", "alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["B008", "E501", "UP046"]  # B008: FastAPI calls in defaults; E501: long lines allowed; UP046: keep classic Generic
+
+[tool.ruff.lint.per-file-ignores]
+"app/tests/*" = ["E501"]
+"scripts/*" = ["E402"]

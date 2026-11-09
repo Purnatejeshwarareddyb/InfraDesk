@@ -1,0 +1,54 @@
+---
+# Post-deployment checks (read-only).
+#   ansible-playbook playbooks/validate.yml
+- name: Validate a running InfraDesk
+  hosts: infradesk
+  gather_facts: false
+  # group_vars/ sits next to playbooks/, not next to the inventory, so load it explicitly.
+  vars_files:
+    - ../group_vars/all.yml
+  tags: [validate]
+  tasks:
+    - name: Liveness - GET /health
+      ansible.builtin.uri:
+        url: "{{ infradesk_base_url }}/health"
+        return_content: true
+      register: health
+      failed_when: health.status != 200 or health.json.status | default('') != 'ok'
+
+    - name: Readiness - GET /ready (database reachable)
+      ansible.builtin.uri:
+        url: "{{ infradesk_base_url }}/ready"
+        return_content: true
+      register: ready
+      failed_when: ready.status != 200 or ready.json.status | default('') != 'ready'
+
+    # The login page is a React route; nginx must answer it with index.html (SPA fallback).
+    - name: Login page - GET /login returns HTML
+      ansible.builtin.uri:
+        url: "{{ infradesk_base_url }}/login"
+        return_content: true
+      register: login
+      failed_when: login.status != 200 or '<html' not in (login.content | lower)
+
+    - name: API documentation - GET /docs
+      ansible.builtin.uri:
+        url: "{{ infradesk_base_url }}/docs"
+        status_code: 200
+
+    - name: OpenAPI document - GET /openapi.json describes InfraDesk
+      ansible.builtin.uri:
+        url: "{{ infradesk_base_url }}/openapi.json"
+        return_content: true
+      register: openapi
+      failed_when: openapi.status != 200 or 'InfraDesk' not in openapi.json.info.title
+
+    - name: Data volume exists
+      ansible.builtin.command: "docker volume inspect {{ infradesk_data_volume }}"
+      changed_when: false
+      check_mode: false
+      become: "{{ infradesk_become }}"
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg: "All checks passed: /health, /ready, /login, /docs, /openapi.json and volume {{ infradesk_data_volume }}."

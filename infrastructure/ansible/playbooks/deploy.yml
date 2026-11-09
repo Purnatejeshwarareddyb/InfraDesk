@@ -1,0 +1,16 @@
+---
+# Deploy (or update) InfraDesk with Docker Compose. Idempotent: running it twice changes nothing.
+#   export INFRADESK_SECRET_KEY=...        (see README)
+#   ansible-playbook playbooks/deploy.yml -K
+- name: Preflight checks
+  ansible.builtin.import_playbook: preflight.yml
+
+- name: Deploy InfraDesk
+  hosts: infradesk
+  gather_facts: false
+  # group_vars/ sits next to playbooks/, not next to the inventory, so load it explicitly.
+  vars_files:
+    - ../group_vars/all.yml
+  tags: [deploy]
+  roles:
+    - infradesk

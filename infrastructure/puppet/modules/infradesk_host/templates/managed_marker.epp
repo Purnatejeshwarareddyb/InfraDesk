@@ -1,0 +1,6 @@
+<%- | String $env_file | -%>
+This host's InfraDesk baseline is managed by Puppet (module infradesk_host, `puppet apply`).
+Do not edit managed files by hand; changes are reverted on the next apply:
+  <%= $env_file %>
+  /usr/local/sbin/infradesk-backup and the infradesk-backup.service/.timer units
+Application files under /opt/infradesk/app belong to Ansible, not to Puppet.

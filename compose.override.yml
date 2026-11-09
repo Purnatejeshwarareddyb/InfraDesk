@@ -1,0 +1,11 @@
+# Development extras. Docker Compose merges this file automatically into docker-compose.yml.
+# Skip it (production-like) with:  docker compose -f docker-compose.yml up -d
+services:
+  backend:
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}   # allows scripts/seed_demo_data.py
+    ports:
+      - "127.0.0.1:8000:8000"                    # call the API directly (Swagger at :8000/docs), localhost only
+    volumes:
+      - ./backend/app:/app/app:ro                # edit Python code on the host ...
+    command: ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/app"]   # ... and uvicorn reloads

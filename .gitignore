@@ -1,0 +1,63 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+
+# Local databases, backups and runtime data
+backend/data/
+backend/backups/
+backups/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite3
+*.before-restore-*
+
+# Node / frontend
+node_modules/
+frontend/dist/
+frontend/coverage/
+*.tsbuildinfo
+
+# Terraform (the lock file IS committed)
+infrastructure/terraform/.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+terraform.tfvars
+*.auto.tfvars
+
+# Ansible / Puppet / Nagios generated files
+*.retry
+infrastructure/ansible/.vault_pass
+infrastructure/puppet/.tmp/
+
+# LaTeX build files (the synopsis .tex and .pdf are committed)
+docs/synopsis/*.aux
+docs/synopsis/*.log
+docs/synopsis/*.fls
+docs/synopsis/*.fdb_latexmk
+docs/synopsis/*.out
+docs/synopsis/*.toc
+docs/synopsis/build.log
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+.run/
+.offline/

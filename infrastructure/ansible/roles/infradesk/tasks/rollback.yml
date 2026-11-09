@@ -1,0 +1,73 @@
+---
+# Put the previously recorded image tag back. Data in the volume is NOT touched.
+# Caveat: database migrations are not undone. If the newer release changed the schema, restore a
+# backup taken before the deploy (scripts/restore.sh) after rolling back.
+- name: Read the deployment state file
+  ansible.builtin.slurp:
+    src: "{{ infradesk_state_file }}"
+  register: infradesk_state_raw
+  failed_when: false
+  check_mode: false
+  become: "{{ infradesk_become }}"
+
+- name: Stop if there is nothing to roll back to
+  ansible.builtin.assert:
+    that:
+      - infradesk_state_raw.content is defined
+      - (infradesk_state_raw.content | b64decode | from_json).get('previous_tag', '') | length > 0
+    fail_msg: "No previous tag recorded in {{ infradesk_state_file }}. Nothing to roll back to (first deployment?)."
+    quiet: true
+
+- name: Remember the tags
+  ansible.builtin.set_fact:
+    infradesk_rollback_target: "{{ (infradesk_state_raw.content | b64decode | from_json).previous_tag }}"
+    infradesk_rollback_from: "{{ (infradesk_state_raw.content | b64decode | from_json).current_tag }}"
+
+- name: Check that the backend image of the target tag still exists locally
+  ansible.builtin.command: "docker image inspect infradesk-backend:{{ infradesk_rollback_target }}"
+  register: infradesk_image_backend
+  changed_when: false
+  check_mode: false
+  failed_when: infradesk_image_backend.rc != 0
+  become: "{{ infradesk_become }}"
+
+- name: Check that the web image of the target tag still exists locally
+  ansible.builtin.command: "docker image inspect infradesk-frontend:{{ infradesk_rollback_target }}"
+  changed_when: false
+  check_mode: false
+  become: "{{ infradesk_become }}"
+
+- name: Point the .env file at the previous tag
+  ansible.builtin.lineinfile:
+    path: "{{ infradesk_app_dir }}/.env"
+    regexp: '^INFRADESK_TAG='
+    line: "INFRADESK_TAG={{ infradesk_rollback_target }}"
+  become: "{{ infradesk_become }}"
+
+- name: Recreate the containers from the old images (no build)
+  ansible.builtin.command:
+    argv: "{{ infradesk_compose_cmd + ['up', '-d', '--no-build'] }}"
+    chdir: "{{ infradesk_app_dir }}"
+  become: "{{ infradesk_become }}"
+  changed_when: true
+
+- name: Swap current and previous in the state file (running rollback twice rolls forward again)
+  ansible.builtin.copy:
+    dest: "{{ infradesk_state_file }}"
+    mode: "0644"
+    content: "{{ {'current_tag': infradesk_rollback_target, 'previous_tag': infradesk_rollback_from} | to_nice_json }}\n"
+  become: "{{ infradesk_become }}"
+
+- name: Wait until /ready answers again
+  ansible.builtin.uri:
+    url: "{{ infradesk_base_url }}/ready"
+    return_content: true
+  register: infradesk_ready_check
+  until: infradesk_ready_check.status == 200 and 'ready' in infradesk_ready_check.content
+  retries: "{{ infradesk_ready_retries }}"
+  delay: "{{ infradesk_ready_delay }}"
+  check_mode: false
+
+- name: Report
+  ansible.builtin.debug:
+    msg: "Rolled back from {{ infradesk_rollback_from }} to {{ infradesk_rollback_target }}."

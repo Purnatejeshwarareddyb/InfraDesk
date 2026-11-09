@@ -1,0 +1,10 @@
+# Managed by Puppet (module infradesk_host).
+[Unit]
+Description=InfraDesk database backup
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/infradesk/infradesk.env
+ExecStart=/usr/local/sbin/infradesk-backup

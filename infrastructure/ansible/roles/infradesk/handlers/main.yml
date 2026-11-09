@@ -1,0 +1,9 @@
+---
+# Handlers run only when a task notified them, i.e. when files or the .env really changed.
+- name: Build images and recreate the stack
+  ansible.builtin.command:
+    argv: "{{ infradesk_compose_cmd + ['up', '-d', '--build', '--remove-orphans'] }}"
+    chdir: "{{ infradesk_app_dir }}"
+  become: "{{ infradesk_become }}"
+  changed_when: true
+  listen: infradesk stack changed

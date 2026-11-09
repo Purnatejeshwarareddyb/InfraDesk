@@ -1,0 +1,13 @@
+<%- | String $backup_time | -%>
+# Managed by Puppet (module infradesk_host).
+[Unit]
+Description=Daily InfraDesk database backup
+
+[Timer]
+OnCalendar=<%= $backup_time %>
+# Run a missed backup at the next boot (laptops are often off at night).
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
