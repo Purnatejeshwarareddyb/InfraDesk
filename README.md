@@ -147,6 +147,11 @@ environment variables and `.env` is git-ignored. Details and known limits: [docs
 [Test results](docs/test-results.md) · [Troubleshooting](docs/troubleshooting.md), [User manual](docs/user-manual.md) · [Demo script](docs/demo-script.md) ·
 [Viva questions](docs/viva-questions.md) · [Report outline](docs/report-outline.md) · [SPM plan](docs/spm-ms-project-plan.md)
 
+## Flow
+[![Architecture diagram](https://gitdiagram.com/diagram-badge.svg)](https://gitdiagram.com/purnatejeshwarareddyb/infradesk?utm_source=readme&utm_medium=badge)
+
+
+
 ## Licence
 
 MIT, see [LICENSE](LICENSE). Bundled Swagger UI is Apache-2.0 (`backend/app/static/swagger/LICENSE`).
